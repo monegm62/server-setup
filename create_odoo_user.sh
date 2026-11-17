@@ -48,7 +48,9 @@ fi
 
 # ---------- 3. password ----------
 log "Set the password for $USER_NAME"
-until passwd "$USER_NAME"; do echo "Try again."; done
+# Read from the terminal, not stdin: stdin is the script itself under "curl ... | sudo bash".
+[[ -r /dev/tty ]] || die "No terminal available to ask for the password."
+until passwd "$USER_NAME" < /dev/tty; do echo "Try again."; done
 
 # ---------- 4. SSH ----------
 if ! command -v sshd &>/dev/null && [[ ! -x /usr/sbin/sshd ]]; then

@@ -20,7 +20,13 @@ sudo bash create_odoo_user.sh
 sudo bash create_odoo_user.sh "ssh-ed25519 AAAA... me@laptop"
 ```
 
-The repo is private. On a server with `gh` logged in:
+Quick run (repo is public):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/monegm62/server-setup/main/create_odoo_user.sh | sudo bash
+```
+
+With `gh`:
 
 ```bash
 gh api repos/monegm62/server-setup/contents/create_odoo_user.sh -H "Accept: application/vnd.github.raw" > create_odoo_user.sh && sudo bash create_odoo_user.sh
