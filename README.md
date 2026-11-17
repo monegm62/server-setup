@@ -37,3 +37,15 @@ Or with a fine-grained read-only token (`Contents: read` on this repo only):
 ```bash
 curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/monegm62/server-setup/contents/create_odoo_user.sh -o create_odoo_user.sh && sudo bash create_odoo_user.sh
 ```
+
+## install_odoo19.sh
+
+Installs Odoo 19 Community (official repo) + PostgreSQL + wkhtmltopdf + Nginx reverse proxy
+(websocket on 8072, Odoo bound to 127.0.0.1). The database master password is generated and
+saved in `/root/odoo-master-password.txt`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/monegm62/server-setup/main/install_odoo19.sh | sudo bash
+# with a domain + free SSL (the domain's DNS must already point to the server):
+curl -fsSL https://raw.githubusercontent.com/monegm62/server-setup/main/install_odoo19.sh | sudo bash -s -- erp.example.com
+```
