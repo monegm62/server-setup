@@ -66,9 +66,22 @@ else
     ( umask 077; printf '%s\n' "$MASTER_PW" > "$PASS_FILE" )
 fi
 
+# Sizing: ~6 concurrent users per worker -> 20 users = 4 workers + 1 headroom = 5.
+# Capped by CPU (2*cores+1) and by RAM (~1 GB per worker after 2 GB for OS + PostgreSQL).
+# Override: CONCURRENT_USERS=40 curl ... | sudo -E bash
+CONCURRENT_USERS="${CONCURRENT_USERS:-20}"
 CPUS="$(nproc)"
-WORKERS=$(( CPUS * 2 + 1 ))
-if (( WORKERS > 9 )); then WORKERS=9; fi
+RAM_MB="$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)"
+WORKERS=$(( (CONCURRENT_USERS + 5) / 6 + 1 ))
+CPU_CAP=$(( CPUS * 2 + 1 ))
+RAM_CAP=$(( (RAM_MB - 2048) / 1024 ))
+if (( WORKERS > CPU_CAP )); then WORKERS=$CPU_CAP; fi
+if (( WORKERS > RAM_CAP )); then WORKERS=$RAM_CAP; fi
+if (( WORKERS < 2 )); then WORKERS=2; fi
+echo "Sizing: $CONCURRENT_USERS users, $CPUS CPU, ${RAM_MB} MB RAM -> $WORKERS workers"
+if (( RAM_MB < 7000 || CPUS < 4 )); then
+    echo "WARNING: for ~$CONCURRENT_USERS concurrent users, 4 vCPU / 8 GB RAM is recommended." >&2
+fi
 
 if [[ -f "$ODOO_CONF" ]]; then cp -a "$ODOO_CONF" "$ODOO_CONF.bak.$(date +%Y%m%d%H%M%S)"; fi
 cat > "$ODOO_CONF" <<EOF
@@ -86,13 +99,31 @@ gevent_port = 8072
 proxy_mode = True
 workers = $WORKERS
 max_cron_threads = 1
-limit_memory_soft = 2147483648
-limit_memory_hard = 2684354560
+limit_memory_soft = 1073741824
+limit_memory_hard = 1342177280
+limit_request = 8192
+db_maxconn = 16
 limit_time_cpu = 600
 limit_time_real = 1200
 EOF
 chown root:odoo "$ODOO_CONF"
 chmod 640 "$ODOO_CONF"
+
+# ---------- PostgreSQL tuning (Ubuntu includes conf.d automatically) ----------
+PG_CONF_DIR="$(ls -d /etc/postgresql/*/main 2>/dev/null | sort -V | tail -1)/conf.d"
+if [[ -d "$PG_CONF_DIR" ]]; then
+    log "Tuning PostgreSQL for ${RAM_MB} MB RAM"
+    cat > "$PG_CONF_DIR/90-odoo.conf" <<EOF
+# Added by install_odoo19.sh
+shared_buffers = $(( RAM_MB / 4 ))MB
+effective_cache_size = $(( RAM_MB * 3 / 4 ))MB
+work_mem = 16MB
+maintenance_work_mem = $(( RAM_MB / 16 ))MB
+max_connections = 200
+random_page_cost = 1.1
+EOF
+    systemctl restart postgresql
+fi
 
 systemctl enable odoo
 systemctl restart odoo
